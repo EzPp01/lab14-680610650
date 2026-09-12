@@ -1,4 +1,8 @@
 import { useState } from "react";
+import type { Registrant } from "../libs/Registrant";
+
+const STORAGE_KEY = "registrants";
+
 //---- แผนการวิ่ง ----
 const plans = [
   { id: "funrun", label: "Fun run 5.5 Km", price: 500 },
@@ -25,7 +29,34 @@ export default function ModalRegister() {
   const [lastName, setLastName] = useState("");
   const [plan, setPlan] = useState("");
   const [gender, setGender] = useState("");
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [agreeTerms, setAgreeTerms] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
+
+  // STEP 2.1: หาราคาของ Plan ที่เลือกอยู่
+  const selectedPlanPrice = plans.find((p) => p.id === plan)?.price ?? 0;
+
+  // STEP 2.1: รวมราคา Extra Items ที่เลือก
+  const extraItemsTotal = extraItems
+    .filter((item) => selectedItems.includes(item.id))
+    .reduce((sum, item) => sum + item.price, 0);
+
+  // STEP 2.2: เช็คว่าเลือก Extra Items ครบทั้ง 3 ชิ้นหรือไม่
+  const isAllItemsSelected = selectedItems.length === extraItems.length;
+
+  // STEP 2.1 + 2.2: ราคารวมทั้งหมด (ก่อนลด)
+  const subtotal = selectedPlanPrice + extraItemsTotal;
+
+  // ถ้าเลือกครบ 3 ชิ้น ลด 20% จากราคารวมทั้งหมด
+  const totalPayment = isAllItemsSelected ? subtotal * 0.8 : subtotal;
+
+  const toggleExtraItem = (itemId: string) => {
+    setSelectedItems((prev) =>
+      prev.includes(itemId)
+        ? prev.filter((id) => id !== itemId)
+        : [...prev, itemId]
+    );
+  };
 
   // STEP: validate ข้อมูลทั้งหมด เมื่อกดปุ่ม Register
   const validateForm = (): boolean => {
@@ -51,8 +82,30 @@ export default function ModalRegister() {
   const handleRegisterClick = () => {
     const isValid = validateForm();
     if (isValid) {
-      // TODO: ทำงานต่อเมื่อข้อมูลถูกต้อง (บันทึกข้อมูล / ปิด modal ฯลฯ)
-      console.log("Form is valid, submitting...");
+      // STEP 6: สร้างข้อมูลผู้ลงทะเบียนแล้วบันทึกลง LocalStorage
+      const planLabel = plans.find((p) => p.id === plan)?.label ?? "";
+      const chosenExtraItems = extraItems
+        .filter((item) => selectedItems.includes(item.id))
+        .map((item) => item.label);
+
+      const newRegistrant: Registrant = {
+        id: Date.now(),
+        fullName: `${firstName} ${lastName}`,
+        gender,
+        plan: planLabel,
+        total: totalPayment,
+        extraItems: chosenExtraItems,
+      };
+
+      const stored = localStorage.getItem(STORAGE_KEY);
+      const currentList: Registrant[] = stored ? JSON.parse(stored) : [];
+      const updatedList = [...currentList, newRegistrant];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+
+      // STEP 4: แสดง Alert บอกราคาสุทธิเมื่อลงทะเบียนสำเร็จ
+      alert(
+        `Registration complete. Please pay money for ${totalPayment.toLocaleString()} THB.`
+      );
     }
   };
 
@@ -88,7 +141,6 @@ export default function ModalRegister() {
                   value={firstName}
                   onChange={(e) => {
                     setFirstName(e.target.value);
-                    // STEP 1.2: ซ่อนข้อความแจ้งเตือนเมื่อมีการแก้ไข
                     if (errors.firstName) {
                       setErrors((prev) => ({
                         ...prev,
@@ -191,31 +243,47 @@ export default function ModalRegister() {
               <label className="form-label">Extra Item(s)</label>
               {extraItems.map((item) => (
                 <div key={item.id}>
-                  <input className="me-2 form-check-input" type="checkbox" />
+                  <input
+                    className="me-2 form-check-input"
+                    type="checkbox"
+                    checked={selectedItems.includes(item.id)}
+                    onChange={() => toggleExtraItem(item.id)}
+                  />
                   <label className="form-check-label">
                     {item.label} ({item.price} THB)
                   </label>
                 </div>
               ))}
-              {/* conditional เมื่อเลือกสินค้าเสริมทั้งหมด ให้แสดง discount*/}
-              <span className="text-success d-block">(20% Discounted)</span>
+              {/* STEP 2.2: แสดงเมื่อเลือกสินค้าเสริมครบทั้ง 3 ชิ้น */}
+              {isAllItemsSelected && (
+                <span className="text-success d-block">
+                  (20% Discounted)
+                </span>
+              )}
             </div>
 
             <div className="alert alert-primary mt-3" role="alert">
               Promotion📢 Buy all items to get 20% Discount
             </div>
 
-            <div>Total Payment : ... THB</div>
+            {/* STEP 2.1 + 2.2: แสดงราคารวมแบบ Realtime */}
+            <div>Total Payment : {totalPayment.toLocaleString()} THB</div>
           </div>
 
           <div className="modal-footer">
             <div>
-              <input className="me-2 form-check-input" type="checkbox" />I
-              agree to the terms and conditions
+              <input
+                className="me-2 form-check-input"
+                type="checkbox"
+                checked={agreeTerms}
+                onChange={(e) => setAgreeTerms(e.target.checked)}
+              />
+              I agree to the terms and conditions
             </div>
             <button
               className="btn btn-success my-2"
               onClick={handleRegisterClick}
+              disabled={!agreeTerms}
             >
               Register
             </button>

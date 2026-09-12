@@ -1,9 +1,9 @@
 interface Registrant {
-  id: number; 
+  id: number;
   fullName: string;
-  gender: string; 
-  plan: string; 
+  gender: string;
+  plan: string;
   total: number;
+  extraItems: string[];
 }
 export type { Registrant };
-
